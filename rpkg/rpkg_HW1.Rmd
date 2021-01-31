@@ -1,6 +1,6 @@
 ---
 title: "Homework 1 - readable and efficient R code"
-author: "your name here"
+author: "Owen Jiang"
 date: "`r format(Sys.time(), '%m/%d/%Y')`"
 output: html_document
 ---
@@ -19,34 +19,71 @@ Read over the code below and perform the following:
   function `all.equal`.
 
 ```{r}
+## wrap it into a function foobar0
+foobar0 <- function(x, z){
+  if (sum(x >= .001) < 1) {
+    stop("step 1 requires 1 observation(s) with value >= .001")
+  }
+  fit <- lm(x ~ z)
+  r <- fit$residuals
+  x <- sin(r) + .01
+  if (sum(x >= .002) < 2) {
+    stop("step 2 requires 2 observation(s) with value >= .002")
+  }
+  fit <- lm(x ~ z)
+  r <- fit$residuals
+  x <- 2 * sin(r) + .02
+  if (sum(x >= .003) < 3) {
+    stop("step 3 requires 3 observation(s) with value >= .003")
+  }
+  fit <- lm(x ~ z)
+  r <- fit$residuals
+  x <- 3 * sin(r) + .03
+  if (sum(x >= .004) < 4) {
+    stop("step 4 requires 4 observation(s) with value >= .004")
+  }
+  fit <- lm(x ~ z)
+  r <- fit$residuals
+  x <- 4 * sin(r) + .04
+  return(x)
+}
+
+
+## rewrite it into a function foobar
+CheckInput <- function(x, n){
+  threshold <- n/1000
+  if (sum(x >= threshold) < n){
+    stop(sprintf('step %s requires %s observation(s) with value >= %s', n, n, threshold))
+  }
+}
+
+
+Computation <- function(x, z, n){
+  fit <- lm(x ~ z)
+  r <- fit$residuals
+  x <- n * sin(r) + n/100
+  return(x)
+}
+
+
+foobar <- function(x, z){
+  n <- 1
+  while(n <= 4){
+    CheckInput(x, n)
+    x <- Computation(x, z, n)
+    n <- n + 1
+  }
+  return(x)
+}
+
+
+## check identical results
 set.seed(1)
 x <- rnorm(100)
 z <- rnorm(100)
-if (sum(x >= .001) < 1) {
-  stop("step 1 requires 1 observation(s) with value >= .001")
-}
-fit <- lm(x ~ z)
-r <- fit$residuals
-x <- sin(r) + .01
-if (sum(x >= .002) < 2) {
-  stop("step 2 requires 2 observation(s) with value >= .002")
-}
-fit <- lm(x ~ z)
-r <- fit$residuals
-x <- 2 * sin(r) + .02
-if (sum(x >= .003) < 3) {
-  stop("step 3 requires 3 observation(s) with value >= .003")
-}
-fit <- lm(x ~ z)
-r <- fit$residuals
-x <- 3 * sin(r) + .03
-if (sum(x >= .004) < 4) {
-  stop("step 4 requires 4 observation(s) with value >= .004")
-}
-fit <- lm(x ~ z)
-r <- fit$residuals
-x <- 4 * sin(r) + .04
-x
+results.foobar0 <- foobar0(x, z)
+results.foobar <- foobar(x, z)
+all.equal(results.foobar0, results.foobar)
 ```
 
 # Question 2 - vectorize this code and benchmark
@@ -74,7 +111,24 @@ f0 <- function(x,b,a) {
   }
   out
 }
+
+## rewrite as a function f
+f <- function(x, b, a){
+  out <- colSums(tcrossprod(x, b)) + colSums(t(a))
+  return(out)
+}
+
+
+## compare results and benchmark
+result.f0 <- f0(x, b, a)
+result.f <- f(x, b, a)
+all.equal(result.f0, result.f)
+
+library(microbenchmark)
+microbenchmark(f0(x, b, a), f(x, b, a))
 ```
+On average, `f` is 4 tiems faster than `f0`.
+
 
 # Question 3 - build a faster t-test
 
@@ -98,4 +152,30 @@ getT0 <- function(x, f) {
   ts <- sapply(seq_len(m), function(i) t.test(x[i,] ~ f, var.equal=TRUE)$statistic)
   unname(ts)
 }
+
+
+## rewrite a function getT
+getT <- function(x, f){
+  # assume f has two levels
+  n <- ncol(x) 
+  first.group <- which(f == levels(f)[1])
+  X <- x[, first.group]
+  Y <- x[, -first.group]
+  X.mean <- rowMeans(X)
+  Y.mean <- rowMeans(Y)
+  sigma2.X <- rowSums((X - X.mean)^2) / (n / 2 - 1)
+  sigma2.Y <- rowSums((Y - Y.mean)^2) / (n / 2 - 1)
+  t.stat <- (X.mean - Y.mean) / (sqrt(2 / n * (sigma2.X + sigma2.Y)))
+  return(t.stat)
+}
+
+
+## compare results and benchmark
+result.getT0 <- getT0(x, f)
+result.getT <- getT(x, f)
+all.equal(result.getT0, result.getT)
+
+microbenchmark(getT0(x, f), getT(x, f))
+
 ```
+On aveage, `getT` is many orders of magnitude faster than `getT0`.
